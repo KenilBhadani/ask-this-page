@@ -1,5 +1,4 @@
 import json
-from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +14,6 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Sources"],
 )
 
 
@@ -24,6 +22,12 @@ class AskRequest(BaseModel):
     text: str
     url: str = ""
     title: str = ""
+
+
+def stream_with_sources(sources, tokens):
+    # First line: the passages as JSON. Everything after it: the answer text.
+    yield json.dumps(sources) + "\n"
+    yield from tokens
 
 
 @app.get("/health")
@@ -41,12 +45,8 @@ def ask(req: AskRequest):
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    sources = [
-        {"id": i, "snippet": rag.make_snippet(chunk)}
-        for i, chunk in enumerate(chunks, start=1)
-    ]
+    sources = [{"id": i, "text": chunk} for i, chunk in enumerate(chunks, start=1)]
     return StreamingResponse(
-        llm.iter_tokens(stream),
+        stream_with_sources(sources, llm.iter_tokens(stream)),
         media_type="text/plain; charset=utf-8",
-        headers={"X-Sources": quote(json.dumps(sources))},
     )

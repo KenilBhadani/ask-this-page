@@ -33,7 +33,7 @@ async function getPage() {
   return result;
 }
 
-async function highlightInPage(snippet) {
+async function highlightInPage(candidates) {
   const tab = await getActiveTab();
   await chrome.scripting.insertCSS({
     target: { tabId: tab.id },
@@ -41,14 +41,14 @@ async function highlightInPage(snippet) {
   });
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    args: [snippet],
-    func: (text) => {
+    args: [candidates],
+    func: (options) => {
       const sel = window.getSelection();
       sel.removeAllRanges();
       if (window.CSS && CSS.highlights) CSS.highlights.delete("ask-this-page");
 
-      for (const attempt of [text, text.slice(0, 40)]) {
-        if (!attempt || !window.find(attempt, false, false, true)) continue;
+      for (const text of options) {
+        if (!text || !window.find(text, false, false, true)) continue;
 
         const range = sel.getRangeAt(0).cloneRange();
         if (window.CSS && CSS.highlights && window.Highlight) {
@@ -65,14 +65,52 @@ async function highlightInPage(snippet) {
   return result;
 }
 
-function makeChip(id, snippet) {
+// ---- Picking the sentence a citation points to ----
+
+function words(text) {
+  return text.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) || [];
+}
+
+function bestSentence(passage, claim) {
+  const claimWords = new Set(words(claim));
+  const sentences = passage
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 20);
+
+  let best = null;
+  let bestScore = 0;
+  for (const sentence of sentences) {
+    const sentenceWords = words(sentence);
+    if (!sentenceWords.length) continue;
+    const overlap = sentenceWords.filter((w) => claimWords.has(w)).length;
+    const score = overlap / Math.sqrt(sentenceWords.length);
+    if (score > bestScore) {
+      best = sentence;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function searchCandidates(sentence, passage) {
+  const fallback =
+    passage.split("\n").find((line) => line.trim().length >= 40) || passage;
+  const target = (sentence || fallback).replace(/\s+/g, " ").trim();
+  return [...new Set([target, target.slice(0, 80).trim(), target.slice(0, 40).trim()])];
+}
+
+// ---- Citation chips ----
+
+function makeChip(source, claim) {
   const btn = document.createElement("button");
   btn.className = "cite";
-  btn.textContent = id;
-  btn.title = "Show this passage on the page";
+  btn.textContent = source.id;
+  btn.title = "Show where this came from";
   btn.addEventListener("click", async () => {
     try {
-      const found = await highlightInPage(snippet);
+      const sentence = bestSentence(source.text, claim);
+      const found = await highlightInPage(searchCandidates(sentence, source.text));
       if (!found) info.textContent = "Couldn't find that passage on the page.";
     } catch (e) {
       info.textContent = "Can't highlight on this page: " + e.message;
@@ -87,11 +125,15 @@ function renderWithCitations(el, text, sources) {
   el.textContent = "";
 
   let last = 0;
+  let claim = "";
   for (const match of text.matchAll(pattern)) {
-    el.appendChild(document.createTextNode(text.slice(last, match.index)));
+    const segment = text.slice(last, match.index);
+    el.appendChild(document.createTextNode(segment));
+    if (segment.replace(/[^\p{L}\p{N}]+/gu, "")) claim = segment;
+
     const ids = match[1].split(",").map((n) => parseInt(n, 10));
     if (ids.every((id) => byId.has(id))) {
-      ids.forEach((id) => el.appendChild(makeChip(id, byId.get(id).snippet)));
+      ids.forEach((id) => el.appendChild(makeChip(byId.get(id), claim)));
     } else {
       el.appendChild(document.createTextNode(match[0]));
     }
@@ -99,6 +141,8 @@ function renderWithCitations(el, text, sources) {
   }
   el.appendChild(document.createTextNode(text.slice(last)));
 }
+
+// ---- Asking a question ----
 
 async function ask() {
   const question = input.value.trim();
@@ -122,27 +166,35 @@ async function ask() {
       throw new Error(err.detail || `Backend returned ${res.status}`);
     }
 
-    let sources = [];
-    try {
-      sources = JSON.parse(
-        decodeURIComponent(res.headers.get("X-Sources") || "[]")
-      );
-    } catch {
-      sources = [];
-    }
-
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = "";
+    let sources = null;
     let answer = "";
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      answer += decoder.decode(value, { stream: true });
+      const piece = decoder.decode(value, { stream: true });
+
+      if (sources === null) {
+        buffer += piece;
+        const newline = buffer.indexOf("\n");
+        if (newline === -1) continue;
+        try {
+          sources = JSON.parse(buffer.slice(0, newline));
+        } catch {
+          sources = [];
+        }
+        answer = buffer.slice(newline + 1);
+      } else {
+        answer += piece;
+      }
       reply.textContent = answer;
       window.scrollTo(0, document.body.scrollHeight);
     }
 
-    renderWithCitations(reply, answer, sources);
+    renderWithCitations(reply, answer, sources || []);
   } catch (e) {
     reply.textContent = "Error: " + e.message;
   } finally {
