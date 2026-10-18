@@ -17,6 +17,10 @@ _splitter = RecursiveCharacterTextSplitter(
     chunk_size=config.CHUNK_SIZE,
     chunk_overlap=config.CHUNK_OVERLAP,
 )
+_plain_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=config.CHUNK_SIZE,
+    chunk_overlap=0,
+)
 
 
 def _get_embedder():
@@ -58,13 +62,23 @@ def _get_index(text):
 
 
 def get_context(text, question):
-    """Return (context, is_excerpt).
+    """Return (chunks, is_excerpt).
 
-    Short pages are sent whole. Long pages are reduced to the most relevant chunks.
+    Short pages are split into passages and all are sent.
+    Long pages are reduced to the most relevant chunks.
     """
     if len(text) <= config.MAX_PAGE_CHARS:
-        return text, False
+        return _plain_splitter.split_text(text), False
     index = _get_index(text[: config.MAX_INDEX_CHARS])
     chunks = index.search(question, config.TOP_K)
     log.info("Retrieved %d of %d chunks", len(chunks), len(index.chunks))
-    return "\n\n---\n\n".join(chunks), True
+    return chunks, True
+
+
+def make_snippet(chunk, size=80):
+    """A short single-line piece of a chunk, used to find it on the page."""
+    lines = [line.strip() for line in chunk.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    line = next((ln for ln in lines if len(ln) >= 40), max(lines, key=len))
+    return line[:size].strip()

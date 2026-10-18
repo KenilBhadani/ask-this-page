@@ -1,3 +1,6 @@
+import json
+from urllib.parse import quote
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -12,6 +15,7 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Sources"],
 )
 
 
@@ -30,13 +34,19 @@ def health():
 @app.post("/ask")
 def ask(req: AskRequest):
     try:
-        context, is_excerpt = rag.get_context(req.text, req.question)
+        chunks, is_excerpt = rag.get_context(req.text, req.question)
         stream = llm.open_stream(
-            req.question, req.title, req.url, context, is_excerpt
+            req.question, req.title, req.url, chunks, is_excerpt
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+    sources = [
+        {"id": i, "snippet": rag.make_snippet(chunk)}
+        for i, chunk in enumerate(chunks, start=1)
+    ]
     return StreamingResponse(
         llm.iter_tokens(stream),
         media_type="text/plain; charset=utf-8",
+        headers={"X-Sources": quote(json.dumps(sources))},
     )
