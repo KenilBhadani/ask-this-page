@@ -2,20 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ask this page</title>
   <link rel="stylesheet" href="panel.css">
 </head>
 <body>
-  <div class="header">
-    <h3>Ask this page</h3>
-    <button id="new-chat">New chat</button>
-  </div>
+  <header class="header">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </span>
+      <div>
+        <h1>Ask this page</h1>
+        <p class="tagline">Chat with the page you're reading</p>
+      </div>
+    </div>
+    <button id="new-chat" class="ghost" type="button">New chat</button>
+  </header>
+
   <p id="info"></p>
-  <div id="chat"></div>
-  <div class="row">
-    <input id="question" type="text" placeholder="Ask anything about this page">
-    <button id="send">Ask</button>
-  </div>
+
+  <div id="chat" aria-label="Conversation"></div>
+
+  <footer class="composer">
+    <div class="composer-box">
+      <input id="question" type="text" placeholder="Ask anything about this page" autocomplete="off">
+      <button id="send" type="button" aria-label="Send question">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="19" x2="12" y2="5"/>
+          <polyline points="5 12 12 5 19 12"/>
+        </svg>
+      </button>
+    </div>
+    <p class="hint">Answers come from this page's text and can contain mistakes.</p>
+  </footer>
+
   <script src="panel.js"></script>
 </body>
 </html>

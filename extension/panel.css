@@ -1,84 +1,334 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --surface: #f3f4f6;
+  --border: #e5e7eb;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --on-accent: #ffffff;
+  --cite-bg: #eef2ff;
+  --cite-border: #c7d2fe;
+  --cite-text: #3730a3;
+  --code-bg: rgba(0, 0, 0, 0.07);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1c21;
+    --surface: #26272d;
+    --border: #3a3b42;
+    --text: #e8e9ed;
+    --muted: #9a9ca6;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --on-accent: #ffffff;
+    --cite-bg: #2e2f4a;
+    --cite-border: #4b4d7a;
+    --cite-text: #c7d2fe;
+    --code-bg: rgba(255, 255, 255, 0.1);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
-  font-family: sans-serif;
-  padding: 12px;
-}
-
-#info {
-  font-size: 12px;
-  color: #666;
-}
-
-#chat {
+  margin: 0;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 12px 0;
-}
-
-.msg {
-  padding: 8px 10px;
-  border-radius: 10px;
-  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
   line-height: 1.5;
-  white-space: pre-wrap;
-  max-width: 90%;
 }
 
-.user {
-  align-self: flex-end;
-  background: #dbeafe;
-}
-
-.bot {
-  align-self: flex-start;
-  background: #f1f1f1;
-}
-
-.row {
-  display: flex;
-  gap: 6px;
-}
-
-#question {
-  flex: 1;
-  padding: 6px;
-}
-
-.cite {
-  font-size: 11px;
-  padding: 0 6px;
-  margin: 0 2px;
-  border: 1px solid #93c5fd;
-  border-radius: 999px;
-  background: #eff6ff;
-  color: #1d4ed8;
+button {
+  font: inherit;
   cursor: pointer;
 }
 
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Header ---------- */
+
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
 }
 
-.header h3 {
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.logo {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.logo svg {
+  width: 18px;
+  height: 18px;
+}
+
+h1 {
   margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.tagline {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ghost {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ghost:hover {
+  background: var(--surface);
+}
+
+/* ---------- Page info ---------- */
+
+#info {
+  margin: 10px 14px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+#info:empty {
+  display: none;
+}
+
+/* ---------- Chat ---------- */
+
+#chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+#chat:empty::before {
+  content: "Ask anything about this page";
+  margin-top: 28px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+#chat:empty::after {
+  content: "Answers cite their sources. Click a number to jump to that passage on the page.";
+  padding: 0 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.msg {
+  max-width: 90%;
+  padding: 9px 12px;
+  border-radius: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  animation: rise 0.18s ease-out;
 }
 
 .msg.rendered {
   white-space: normal;
 }
 
+.msg.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-bottom-right-radius: 4px;
+}
+
+.msg.bot {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg {
+    animation: none;
+  }
+}
+
+/* ---------- Formatted answers ---------- */
+
 .msg p {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
 }
 
 .msg ul,
 .msg ol {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   padding-left: 20px;
+}
+
+.msg li {
+  margin-bottom: 2px;
 }
 
 .msg > :last-child {
   margin-bottom: 0;
+}
+
+.msg code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--code-bg);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 12.5px;
+}
+
+/* ---------- Citation chips ---------- */
+
+.cite {
+  min-width: 20px;
+  height: 20px;
+  margin: 0 2px;
+  padding: 0 6px;
+  border: 1px solid var(--cite-border);
+  border-radius: 999px;
+  background: var(--cite-bg);
+  color: var(--cite-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: 1px;
+}
+
+.cite:hover {
+  background: var(--cite-text);
+  border-color: var(--cite-text);
+  color: var(--cite-bg);
+}
+
+/* ---------- Message box ---------- */
+
+.composer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 10px 14px 12px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.composer-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+}
+
+.composer-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+#question {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+#question::placeholder {
+  color: var(--muted);
+}
+
+#send {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+#send svg {
+  width: 18px;
+  height: 18px;
+}
+
+#send:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+#send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.hint {
+  margin: 6px 4px 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
 }
