@@ -42,7 +42,10 @@ async function ask() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, ...page }),
     });
-    if (!res.ok) throw new Error(`Backend returned ${res.status}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Backend returned ${res.status}`);
+    }
 
     const data = await res.json();
     reply.textContent = data.answer;

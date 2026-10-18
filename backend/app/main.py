@@ -1,10 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from . import llm
+
 app = FastAPI(title="Ask this page")
 
-# Allow requests from the extension (fine for local development)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,9 +28,8 @@ def health():
 
 @app.post("/ask")
 def ask(req: AskRequest):
-    return {
-        "answer": (
-            f"Backend received your question: '{req.question}'. "
-            f"The page has {len(req.text)} characters."
-        )
-    }
+    try:
+        answer = llm.answer(req.question, req.title, req.url, req.text)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"answer": answer}
