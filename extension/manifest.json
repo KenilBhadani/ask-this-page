@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Ask this page",
+  "version": "0.1.0",
+  "description": "Ask questions about the web page you are reading.",
+  "permissions": ["activeTab", "scripting", "sidePanel"],
+  "host_permissions": ["<all_urls>"],
+  "action": { "default_title": "Ask this page" },
+  "side_panel": { "default_path": "panel.html" },
+  "background": { "service_worker": "background.js" }
+}

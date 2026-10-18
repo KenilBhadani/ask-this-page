@@ -1,0 +1,13 @@
+body {
+  font-family: sans-serif;
+  padding: 12px;
+}
+
+pre {
+  white-space: pre-wrap;
+  max-height: 60vh;
+  overflow: auto;
+  background: #f4f4f4;
+  padding: 8px;
+  font-size: 12px;
+}
