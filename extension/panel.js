@@ -6,6 +6,9 @@ const chat = document.getElementById("chat");
 const info = document.getElementById("info");
 const input = document.getElementById("question");
 const sendBtn = document.getElementById("send");
+const newChatBtn = document.getElementById("new-chat");
+
+const history = [];
 
 function addMessage(role, text) {
   const div = document.createElement("div");
@@ -24,11 +27,18 @@ async function getPage() {
   const tab = await getActiveTab();
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    func: () => ({
-      url: location.href,
-      title: document.title,
-      text: document.body.innerText,
-    }),
+    func: () => {
+      const body = document.body.innerText;
+      const main = document.querySelector("main, article, [role='main']");
+      const mainText = main ? main.innerText : "";
+      const useMain =
+        mainText.length > 500 && mainText.length >= body.length * 0.3;
+      return {
+        url: location.href,
+        title: document.title,
+        text: useMain ? mainText : body,
+      };
+    },
   });
   return result;
 }
@@ -65,6 +75,21 @@ async function highlightInPage(candidates) {
   return result;
 }
 
+async function clearHighlight() {
+  try {
+    const tab = await getActiveTab();
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        if (window.CSS && CSS.highlights) CSS.highlights.delete("ask-this-page");
+        window.getSelection().removeAllRanges();
+      },
+    });
+  } catch {
+    // The tab may be a page we cannot access. Nothing to clear there.
+  }
+}
+
 // ---- Picking the sentence a citation points to ----
 
 function words(text) {
@@ -97,7 +122,9 @@ function searchCandidates(sentence, passage) {
   const fallback =
     passage.split("\n").find((line) => line.trim().length >= 40) || passage;
   const target = (sentence || fallback).replace(/\s+/g, " ").trim();
-  return [...new Set([target, target.slice(0, 80).trim(), target.slice(0, 40).trim()])];
+  return [
+    ...new Set([target, target.slice(0, 80).trim(), target.slice(0, 40).trim()]),
+  ];
 }
 
 // ---- Citation chips ----
@@ -119,27 +146,96 @@ function makeChip(source, claim) {
   return btn;
 }
 
-function renderWithCitations(el, text, sources) {
+// ---- Rendering answers: Markdown plus citation chips ----
+
+const INLINE =
+  /\[(\d+(?:\s*,\s*\d+)*)\]|\*\*(.+?)\*\*|\*([^*\s][^*]*?)\*|`([^`]+)`/g;
+
+function renderInline(parent, text, sources, state) {
   const byId = new Map(sources.map((s) => [s.id, s]));
-  const pattern = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
-  el.textContent = "";
-
   let last = 0;
-  let claim = "";
-  for (const match of text.matchAll(pattern)) {
-    const segment = text.slice(last, match.index);
-    el.appendChild(document.createTextNode(segment));
-    if (segment.replace(/[^\p{L}\p{N}]+/gu, "")) claim = segment;
 
-    const ids = match[1].split(",").map((n) => parseInt(n, 10));
-    if (ids.every((id) => byId.has(id))) {
-      ids.forEach((id) => el.appendChild(makeChip(byId.get(id), claim)));
+  const addText = (t) => {
+    if (!t) return;
+    parent.appendChild(document.createTextNode(t));
+    state.pending += t;
+  };
+  const addStyled = (tag, t) => {
+    const el = document.createElement(tag);
+    el.textContent = t;
+    parent.appendChild(el);
+    state.pending += t;
+  };
+
+  for (const m of text.matchAll(INLINE)) {
+    addText(text.slice(last, m.index));
+
+    if (m[1] !== undefined) {
+      const ids = m[1].split(",").map((n) => parseInt(n, 10));
+      if (ids.every((id) => byId.has(id))) {
+        if (state.pending.trim()) state.lastClaim = state.pending;
+        state.pending = "";
+        ids.forEach((id) =>
+          parent.appendChild(makeChip(byId.get(id), state.lastClaim))
+        );
+      } else {
+        parent.appendChild(document.createTextNode(m[0]));
+      }
+    } else if (m[2] !== undefined) {
+      addStyled("strong", m[2]);
+    } else if (m[3] !== undefined) {
+      addStyled("em", m[3]);
     } else {
-      el.appendChild(document.createTextNode(match[0]));
+      addStyled("code", m[4]);
     }
-    last = match.index + match[0].length;
+    last = m.index + m[0].length;
   }
-  el.appendChild(document.createTextNode(text.slice(last)));
+  addText(text.slice(last));
+}
+
+function renderMarkdown(el, text, sources) {
+  el.textContent = "";
+  el.classList.add("rendered");
+  const state = { pending: "", lastClaim: "" };
+  let list = null;
+  let listTag = "";
+
+  for (const raw of text.split("\n")) {
+    const line = raw.trimEnd();
+    state.pending = "";
+
+    const item = line.match(/^\s*([*-]|\d+\.)\s+(.*)$/);
+    if (item) {
+      const tag = /\d/.test(item[1]) ? "ol" : "ul";
+      if (!list || listTag !== tag) {
+        list = document.createElement(tag);
+        listTag = tag;
+        el.appendChild(list);
+      }
+      const li = document.createElement("li");
+      renderInline(li, item[2], sources, state);
+      list.appendChild(li);
+      continue;
+    }
+
+    if (!line.trim()) continue;
+    list = null;
+
+    const p = document.createElement("p");
+    const heading = line.match(/^#{1,6}\s+(.*)$/);
+    if (heading) {
+      const strong = document.createElement("strong");
+      renderInline(strong, heading[1], sources, state);
+      p.appendChild(strong);
+    } else {
+      renderInline(p, line, sources, state);
+    }
+    el.appendChild(p);
+  }
+}
+
+function stripCitations(text) {
+  return text.replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, "");
 }
 
 // ---- Asking a question ----
@@ -159,7 +255,7 @@ async function ask() {
     const res = await fetch(`${BACKEND_URL}/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, ...page }),
+      body: JSON.stringify({ question, history: history.slice(-6), ...page }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -190,11 +286,14 @@ async function ask() {
       } else {
         answer += piece;
       }
-      reply.textContent = answer;
+      renderMarkdown(reply, answer, sources);
       window.scrollTo(0, document.body.scrollHeight);
     }
 
-    renderWithCitations(reply, answer, sources || []);
+    history.push(
+      { role: "user", content: question },
+      { role: "assistant", content: stripCitations(answer) }
+    );
   } catch (e) {
     reply.textContent = "Error: " + e.message;
   } finally {
@@ -202,7 +301,16 @@ async function ask() {
   }
 }
 
+async function newChat() {
+  if (sendBtn.disabled) return;
+  chat.replaceChildren();
+  history.length = 0;
+  info.textContent = "";
+  await clearHighlight();
+}
+
 sendBtn.addEventListener("click", ask);
+newChatBtn.addEventListener("click", newChat);
 input.addEventListener("keydown", (e) => {
   if (e.key === "Enter") ask();
 });

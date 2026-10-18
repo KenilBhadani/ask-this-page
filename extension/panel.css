@@ -54,3 +54,31 @@ body {
   color: #1d4ed8;
   cursor: pointer;
 }
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header h3 {
+  margin: 0;
+}
+
+.msg.rendered {
+  white-space: normal;
+}
+
+.msg p {
+  margin: 0 0 6px;
+}
+
+.msg ul,
+.msg ol {
+  margin: 0 0 6px;
+  padding-left: 20px;
+}
+
+.msg > :last-child {
+  margin-bottom: 0;
+}

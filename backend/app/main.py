@@ -1,4 +1,5 @@
 import json
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,11 +18,17 @@ app.add_middleware(
 )
 
 
+class Turn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
 class AskRequest(BaseModel):
     question: str
     text: str
     url: str = ""
     title: str = ""
+    history: list[Turn] = []
 
 
 def stream_with_sources(sources, tokens):
@@ -37,10 +44,17 @@ def health():
 
 @app.post("/ask")
 def ask(req: AskRequest):
+    recent = req.history[-6:]
+    history = [{"role": t.role, "content": t.content[:2000]} for t in recent]
+    last_question = next(
+        (t.content for t in reversed(recent) if t.role == "user"), ""
+    )
+    search_query = f"{last_question} {req.question}".strip()
+
     try:
-        chunks, is_excerpt = rag.get_context(req.text, req.question)
+        chunks, is_excerpt = rag.get_context(req.text, search_query)
         stream = llm.open_stream(
-            req.question, req.title, req.url, chunks, is_excerpt
+            req.question, req.title, req.url, chunks, is_excerpt, history
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
