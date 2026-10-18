@@ -3,11 +3,43 @@ body {
   padding: 12px;
 }
 
-pre {
-  white-space: pre-wrap;
-  max-height: 60vh;
-  overflow: auto;
-  background: #f4f4f4;
-  padding: 8px;
+#info {
   font-size: 12px;
+  color: #666;
+}
+
+#chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.msg {
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-width: 90%;
+}
+
+.user {
+  align-self: flex-end;
+  background: #dbeafe;
+}
+
+.bot {
+  align-self: flex-start;
+  background: #f1f1f1;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+}
+
+#question {
+  flex: 1;
+  padding: 6px;
 }
