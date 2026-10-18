@@ -28,8 +28,9 @@ async function getPage() {
 
 async function ask() {
   const question = input.value.trim();
-  if (!question) return;
+  if (!question || sendBtn.disabled) return;
   input.value = "";
+  sendBtn.disabled = true;
   addMessage("user", question);
   const reply = addMessage("bot", "Thinking...");
 
@@ -47,10 +48,23 @@ async function ask() {
       throw new Error(err.detail || `Backend returned ${res.status}`);
     }
 
-    const data = await res.json();
-    reply.textContent = data.answer;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let first = true;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (first) {
+        reply.textContent = "";
+        first = false;
+      }
+      reply.textContent += decoder.decode(value, { stream: true });
+      window.scrollTo(0, document.body.scrollHeight);
+    }
   } catch (e) {
     reply.textContent = "Error: " + e.message;
+  } finally {
+    sendBtn.disabled = false;
   }
 }
 

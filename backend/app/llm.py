@@ -19,7 +19,7 @@ def _get_client():
     return _client
 
 
-def answer(question: str, title: str, url: str, text: str) -> str:
+def open_stream(question: str, title: str, url: str, text: str):
     page = text[: config.MAX_PAGE_CHARS]
     user_message = (
         f"Page title: {title}\n"
@@ -27,12 +27,24 @@ def answer(question: str, title: str, url: str, text: str) -> str:
         f"<page_content>\n{page}\n</page_content>\n\n"
         f"Question: {question}"
     )
-    completion = _get_client().chat.completions.create(
+    return _get_client().chat.completions.create(
         model=config.GROQ_MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_message},
         ],
         temperature=0.2,
+        stream=True,
     )
-    return completion.choices[0].message.content
+
+
+def iter_tokens(stream):
+    try:
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            token = chunk.choices[0].delta.content
+            if token:
+                yield token
+    except Exception as e:
+        yield f"\n\n[Stream interrupted: {e}]"

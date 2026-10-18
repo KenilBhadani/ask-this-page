@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from . import llm
@@ -29,7 +30,10 @@ def health():
 @app.post("/ask")
 def ask(req: AskRequest):
     try:
-        answer = llm.answer(req.question, req.title, req.url, req.text)
+        stream = llm.open_stream(req.question, req.title, req.url, req.text)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
-    return {"answer": answer}
+    return StreamingResponse(
+        llm.iter_tokens(stream),
+        media_type="text/plain; charset=utf-8",
+    )
