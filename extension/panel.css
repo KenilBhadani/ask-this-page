@@ -12,6 +12,9 @@
   --cite-border: #c7d2fe;
   --cite-text: #3730a3;
   --code-bg: rgba(0, 0, 0, 0.07);
+  --error-bg: #fef2f2;
+  --error-border: #fecaca;
+  --error-text: #991b1b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -28,11 +31,18 @@
     --cite-border: #4b4d7a;
     --cite-text: #c7d2fe;
     --code-bg: rgba(255, 255, 255, 0.1);
+    --error-bg: #3a1f22;
+    --error-border: #7f2d33;
+    --error-text: #fecaca;
   }
 }
 
 * {
   box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 body {
@@ -118,8 +128,13 @@ h1 {
   white-space: nowrap;
 }
 
-.ghost:hover {
+.ghost:hover:not(:disabled) {
   background: var(--surface);
+}
+
+.ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ---------- Page info ---------- */
@@ -138,6 +153,46 @@ h1 {
   display: none;
 }
 
+/* ---------- Welcome and starter buttons ---------- */
+
+.welcome {
+  padding: 28px 18px 8px;
+  text-align: center;
+}
+
+.welcome h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.welcome p {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.starter {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.starter:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ---------- Chat ---------- */
 
 #chat {
@@ -146,22 +201,6 @@ h1 {
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-}
-
-#chat:empty::before {
-  content: "Ask anything about this page";
-  margin-top: 28px;
-  text-align: center;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-#chat:empty::after {
-  content: "Answers cite their sources. Click a number to jump to that passage on the page.";
-  padding: 0 12px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--muted);
 }
 
 .msg {
@@ -191,6 +230,13 @@ h1 {
   border-bottom-left-radius: 4px;
 }
 
+.msg.error {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+  color: var(--error-text);
+  white-space: normal;
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -202,8 +248,46 @@ h1 {
   }
 }
 
+/* ---------- Typing dots ---------- */
+
+.msg.typing {
+  display: flex;
+  gap: 4px;
+  padding: 13px 14px;
+}
+
+.msg.typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: blink 1.2s infinite ease-in-out;
+}
+
+.msg.typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.msg.typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .msg {
+  .msg,
+  .msg.typing span {
     animation: none;
   }
 }
@@ -234,6 +318,37 @@ h1 {
   background: var(--code-bg);
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: 12.5px;
+}
+
+/* ---------- Answer actions (copy) ---------- */
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.stopped {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.copy {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.copy:hover {
+  background: var(--bg);
+  color: var(--text);
 }
 
 /* ---------- Citation chips ---------- */
@@ -317,13 +432,20 @@ h1 {
   height: 18px;
 }
 
-#send:hover:not(:disabled) {
-  background: var(--accent-hover);
+#send .icon-stop {
+  display: none;
 }
 
-#send:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+#send.busy .icon-send {
+  display: none;
+}
+
+#send.busy .icon-stop {
+  display: block;
+}
+
+#send:hover {
+  background: var(--accent-hover);
 }
 
 .hint {

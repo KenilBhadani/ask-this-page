@@ -61,24 +61,31 @@ def _get_index(text):
     return _cache[key]
 
 
-def get_context(text, question):
+def _spread(chunks, k):
+    """Pick k chunks spread evenly from start to end of the page."""
+    if len(chunks) <= k:
+        return chunks
+    step = (len(chunks) - 1) / (k - 1)
+    return [chunks[round(i * step)] for i in range(k)]
+
+
+def get_context(text, question, overview=False):
     """Return (chunks, is_excerpt).
 
     Short pages are split into passages and all are sent.
-    Long pages are reduced to the most relevant chunks.
+    Long pages are reduced to excerpts: the chunks most relevant to the
+    question, or, for an overview, chunks spread across the whole page.
     """
     if len(text) <= config.MAX_PAGE_CHARS:
         return _plain_splitter.split_text(text), False
+
+    if overview:
+        chunks = _splitter.split_text(text[: config.MAX_INDEX_CHARS])
+        picked = _spread(chunks, config.SUMMARY_CHUNKS)
+        log.info("Overview: %d of %d chunks", len(picked), len(chunks))
+        return picked, True
+
     index = _get_index(text[: config.MAX_INDEX_CHARS])
     chunks = index.search(question, config.TOP_K)
     log.info("Retrieved %d of %d chunks", len(chunks), len(index.chunks))
     return chunks, True
-
-
-def make_snippet(chunk, size=80):
-    """A short single-line piece of a chunk, used to find it on the page."""
-    lines = [line.strip() for line in chunk.splitlines() if line.strip()]
-    if not lines:
-        return ""
-    line = next((ln for ln in lines if len(ln) >= 40), max(lines, key=len))
-    return line[:size].strip()

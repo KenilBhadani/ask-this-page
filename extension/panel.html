@@ -24,15 +24,27 @@
 
   <p id="info"></p>
 
+  <section id="welcome" class="welcome">
+    <h2>Ask anything about this page</h2>
+    <p>Answers cite their sources. Click a number to jump to that passage on the page.</p>
+    <div class="starters">
+      <button type="button" class="starter" data-question="Summarize this page in a few sentences.">Summarize this page</button>
+      <button type="button" class="starter" data-question="List the key points of this page as bullet points.">Key points</button>
+    </div>
+  </section>
+
   <div id="chat" aria-label="Conversation"></div>
 
   <footer class="composer">
     <div class="composer-box">
       <input id="question" type="text" placeholder="Ask anything about this page" autocomplete="off">
-      <button id="send" type="button" aria-label="Send question">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <button id="send" type="button" aria-label="Send question" title="Send">
+        <svg class="icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="19" x2="12" y2="5"/>
           <polyline points="5 12 12 5 19 12"/>
+        </svg>
+        <svg class="icon-stop" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="6" width="12" height="12" rx="2"/>
         </svg>
       </button>
     </div>

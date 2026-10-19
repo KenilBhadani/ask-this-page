@@ -3,12 +3,17 @@ const HIGHLIGHT_CSS =
   "::highlight(ask-this-page) { background-color: #fde047; color: #000; }";
 
 const chat = document.getElementById("chat");
+const welcome = document.getElementById("welcome");
 const info = document.getElementById("info");
 const input = document.getElementById("question");
 const sendBtn = document.getElementById("send");
 const newChatBtn = document.getElementById("new-chat");
 
 const history = [];
+let busy = false;
+let controller = null;
+
+// ---- Messages and states ----
 
 function addMessage(role, text) {
   const div = document.createElement("div");
@@ -17,6 +22,37 @@ function addMessage(role, text) {
   chat.appendChild(div);
   return div;
 }
+
+function setBusy(value) {
+  busy = value;
+  sendBtn.classList.toggle("busy", value);
+  sendBtn.setAttribute("aria-label", value ? "Stop answering" : "Send question");
+  sendBtn.title = value ? "Stop" : "Send";
+  newChatBtn.disabled = value;
+}
+
+function showTyping(el) {
+  el.className = "msg bot typing";
+  el.replaceChildren(...[0, 1, 2].map(() => document.createElement("span")));
+}
+
+function showError(el, message) {
+  el.className = "msg bot error";
+  el.textContent = message;
+}
+
+function friendlyError(e) {
+  const msg = String((e && e.message) || e);
+  if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+    return "Can't reach the backend. Make sure the server is running (uvicorn app.main:app --reload, from the backend folder).";
+  }
+  if (/cannot access|extensions gallery|chrome:\/\//i.test(msg)) {
+    return "This page can't be read by extensions, for example chrome:// pages and the Chrome Web Store. Open a regular website and try again.";
+  }
+  return msg;
+}
+
+// ---- Reading and highlighting the page ----
 
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -194,6 +230,7 @@ function renderInline(parent, text, sources, state) {
 }
 
 function renderMarkdown(el, text, sources) {
+  el.classList.remove("typing");
   el.textContent = "";
   el.classList.add("rendered");
   const state = { pending: "", lastClaim: "" };
@@ -238,16 +275,63 @@ function stripCitations(text) {
   return text.replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, "");
 }
 
+// ---- Copy button ----
+
+function addActions(reply, answer, stopped) {
+  const bar = document.createElement("div");
+  bar.className = "actions";
+
+  if (stopped) {
+    const tag = document.createElement("span");
+    tag.className = "stopped";
+    tag.textContent = "Stopped";
+    bar.appendChild(tag);
+  }
+
+  const copy = document.createElement("button");
+  copy.className = "copy";
+  copy.type = "button";
+  copy.textContent = "Copy";
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(stripCitations(answer));
+      copy.textContent = "Copied";
+    } catch {
+      copy.textContent = "Couldn't copy";
+    }
+    setTimeout(() => {
+      copy.textContent = "Copy";
+    }, 1500);
+  });
+  bar.appendChild(copy);
+  reply.appendChild(bar);
+}
+
+function remember(question, answer) {
+  history.push(
+    { role: "user", content: question },
+    { role: "assistant", content: stripCitations(answer) }
+  );
+}
+
 // ---- Asking a question ----
 
-async function ask() {
-  const question = input.value.trim();
-  if (!question || sendBtn.disabled) return;
-  input.value = "";
-  sendBtn.disabled = true;
-  addMessage("user", question);
-  const reply = addMessage("bot", "Thinking...");
+async function ask(presetQuestion, mode = "ask") {
+  if (busy) return;
+  const question = (presetQuestion || input.value).trim();
+  if (!question) return;
 
+  input.value = "";
+  welcome.hidden = true;
+  addMessage("user", question);
+  const reply = addMessage("bot", "");
+  showTyping(reply);
+
+  controller = new AbortController();
+  setBusy(true);
+
+  let answer = "";
+  let sources = null;
   try {
     const page = await getPage();
     info.textContent = `${page.title} (${page.text.length} characters)`;
@@ -255,7 +339,13 @@ async function ask() {
     const res = await fetch(`${BACKEND_URL}/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history: history.slice(-6), ...page }),
+      body: JSON.stringify({
+        question,
+        mode,
+        history: history.slice(-6),
+        ...page,
+      }),
+      signal: controller.signal,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -265,8 +355,6 @@ async function ask() {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    let sources = null;
-    let answer = "";
 
     while (true) {
       const { done, value } = await reader.read();
@@ -286,31 +374,58 @@ async function ask() {
       } else {
         answer += piece;
       }
-      renderMarkdown(reply, answer, sources);
-      window.scrollTo(0, document.body.scrollHeight);
+      if (answer) {
+        renderMarkdown(reply, answer, sources);
+        window.scrollTo(0, document.body.scrollHeight);
+      }
     }
 
-    history.push(
-      { role: "user", content: question },
-      { role: "assistant", content: stripCitations(answer) }
-    );
+    if (!answer.trim()) {
+      showError(reply, "The model returned an empty answer. Please try again.");
+      return;
+    }
+    renderMarkdown(reply, answer, sources || []);
+    addActions(reply, answer, false);
+    remember(question, answer);
   } catch (e) {
-    reply.textContent = "Error: " + e.message;
+    if (e.name === "AbortError") {
+      if (answer.trim()) {
+        renderMarkdown(reply, answer, sources || []);
+        addActions(reply, answer, true);
+        remember(question, answer);
+      } else {
+        reply.className = "msg bot";
+        reply.textContent = "Stopped.";
+      }
+    } else {
+      showError(reply, friendlyError(e));
+    }
   } finally {
-    sendBtn.disabled = false;
+    controller = null;
+    setBusy(false);
   }
 }
 
 async function newChat() {
-  if (sendBtn.disabled) return;
+  if (busy) return;
   chat.replaceChildren();
   history.length = 0;
   info.textContent = "";
+  welcome.hidden = false;
   await clearHighlight();
 }
 
-sendBtn.addEventListener("click", ask);
-newChatBtn.addEventListener("click", newChat);
-input.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") ask();
+sendBtn.addEventListener("click", () => {
+  if (busy && controller) controller.abort();
+  else ask();
 });
+
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !busy) ask();
+});
+
+newChatBtn.addEventListener("click", newChat);
+
+document.querySelectorAll(".starter").forEach((btn) =>
+  btn.addEventListener("click", () => ask(btn.dataset.question, "summary"))
+);

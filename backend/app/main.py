@@ -28,6 +28,7 @@ class AskRequest(BaseModel):
     text: str
     url: str = ""
     title: str = ""
+    mode: Literal["ask", "summary"] = "ask"
     history: list[Turn] = []
 
 
@@ -52,7 +53,9 @@ def ask(req: AskRequest):
     search_query = f"{last_question} {req.question}".strip()
 
     try:
-        chunks, is_excerpt = rag.get_context(req.text, search_query)
+        chunks, is_excerpt = rag.get_context(
+            req.text, search_query, overview=(req.mode == "summary")
+        )
         stream = llm.open_stream(
             req.question, req.title, req.url, chunks, is_excerpt, history
         )
